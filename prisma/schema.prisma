@@ -1,0 +1,516 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Term {
+  GANJIL
+  GENAP
+}
+
+enum RoleName {
+  DOSEN
+  KAPRODI
+  LPPM
+  LPM
+  DEKAN
+  ADMIN
+}
+
+enum RpsStatus {
+  DRAFT
+  FINAL
+  APPROVED
+}
+
+enum ProjectStatus {
+  PLANNED
+  ONGOING
+  COMPLETED
+}
+
+enum OutputType {
+  JOURNAL
+  PROCEEDING
+  HKI
+  BOOK
+  PATENT
+  DATASET
+  OTHER
+}
+
+enum TargetIndex {
+  SINTA
+  SCOPUS
+  WOS
+  NONE
+}
+
+enum OutputStatus {
+  DRAFT
+  SUBMITTED
+  ACCEPTED
+  PUBLISHED
+  REJECTED
+}
+
+enum ProgramStatus {
+  PLANNED
+  ONGOING
+  COMPLETED
+}
+
+enum VerifiedStatus {
+  DRAFT
+  SUBMITTED
+  VERIFIED
+  REJECTED
+}
+
+enum ReviewerRole {
+  KAPRODI
+  LPPM
+  LPM
+  DEKAN
+}
+
+enum ReviewType {
+  VERIFICATION
+  APPROVAL
+  AUDIT
+  INTERVENTION
+}
+
+enum ReviewStatus {
+  OPEN
+  COMPLETED
+}
+
+enum ReviewDecision {
+  APPROVED
+  NEED_REVISION
+  REJECTED
+  MONITORING
+}
+
+enum EvidenceEntityType {
+  TEACHING_ACTIVITY
+  RESEARCH_OUTPUT
+  SERVICE_PROGRAM
+  SERVICE_IMPACT
+  OTHER
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  VERIFY
+  APPROVE
+}
+
+model Institution {
+  id        String    @id @default(uuid())
+  name      String
+  code      String    @unique
+  faculties Faculty[]
+  users     User[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Faculty {
+  id            String         @id @default(uuid())
+  institutionId String
+  name          String
+  code          String
+  institution   Institution    @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  studyPrograms StudyProgram[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([institutionId, code])
+  @@index([institutionId])
+}
+
+model StudyProgram {
+  id        String     @id @default(uuid())
+  facultyId String
+  name      String
+  code      String
+  faculty   Faculty    @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  lecturers Lecturer[]
+  courses   Course[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([facultyId, code])
+  @@index([facultyId])
+}
+
+model User {
+  id            String      @id @default(uuid())
+  institutionId String
+  email         String      @unique
+  passwordHash  String
+  fullName      String
+  isActive      Boolean     @default(true)
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  roles         UserRole[]
+  lecturer      Lecturer?
+
+  // Relasi balik
+  teachingActivities TeachingActivity[]
+  evidencesUploaded  Evidence[]
+  reviews            Review[]
+  notes              Note[]
+  kpiSnapshots       KpiSnapshot[]
+  auditLogs          AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([institutionId])
+}
+
+model Role {
+  id          String     @id @default(uuid())
+  name        RoleName   @unique
+  description String?
+  users       UserRole[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+model Lecturer {
+  id               String            @id @default(uuid())
+  userId           String            @unique
+  studyProgramId   String
+  nidn             String            @unique
+  academicRank     String?
+  expertiseFocus   String?
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studyProgram     StudyProgram      @relation(fields: [studyProgramId], references: [id], onDelete: Restrict)
+  offerings        CourseOffering[]  @relation("MainLecturerOfferings")
+  coOfferings      CourseOffering[]  @relation("CoLecturerOfferings")
+  researchProjects ResearchProject[]
+  servicePrograms  ServiceProgram[]
+  evidences        Evidence[]
+  reviews          Review[]
+  notes            Note[]
+  kpiSnapshots     KpiSnapshot[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([studyProgramId])
+}
+
+model AcademicYear {
+  id        String           @id @default(uuid())
+  yearStart Int
+  yearEnd   Int
+  label     String
+  periods   AcademicPeriod[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([yearStart, yearEnd])
+}
+
+model AcademicPeriod {
+  id               String       @id @default(uuid())
+  academicYearId   String
+  term             Term
+  startDate        DateTime?
+  endDate          DateTime?
+  bkdDeadline      DateTime?
+  researchDeadline DateTime?
+  serviceDeadline  DateTime?
+  academicYear     AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+
+  offerings        CourseOffering[]
+  researchProjects ResearchProject[]
+  servicePrograms  ServiceProgram[]
+  evidences        Evidence[]
+  reviews          Review[]
+  notes            Note[]
+  kpiSnapshots     KpiSnapshot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([academicYearId, term])
+  @@index([academicYearId])
+}
+
+model Course {
+  id             String           @id @default(uuid())
+  studyProgramId String
+  code           String
+  name           String
+  credits        Int
+  studyProgram   StudyProgram     @relation(fields: [studyProgramId], references: [id], onDelete: Cascade)
+  offerings      CourseOffering[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([studyProgramId, code])
+  @@index([studyProgramId])
+}
+
+model CourseOffering {
+  id               String  @id @default(uuid())
+  courseId         String
+  academicPeriodId String
+  className        String
+  lecturerId       String
+  coLecturerId     String?
+  studentCount     Int?
+
+  course         Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  academicPeriod AcademicPeriod @relation(fields: [academicPeriodId], references: [id], onDelete: Cascade)
+
+  lecturer   Lecturer  @relation("MainLecturerOfferings", fields: [lecturerId], references: [id], onDelete: Restrict)
+  coLecturer Lecturer? @relation("CoLecturerOfferings", fields: [coLecturerId], references: [id], onDelete: SetNull)
+
+  teachingActivity TeachingActivity?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([courseId, academicPeriodId, className, lecturerId])
+  @@index([academicPeriodId])
+  @@index([lecturerId])
+  @@index([coLecturerId])
+}
+
+model TeachingActivity {
+  id                    String         @id @default(uuid())
+  courseOfferingId      String         @unique
+  rpsStatus             RpsStatus      @default(DRAFT)
+  lmsHealthScore        Decimal?       @db.Decimal(4, 3) // 0..1
+  assessmentOntimeScore Decimal?       @db.Decimal(4, 3) // 0..1
+  progressScore         Decimal?       @db.Decimal(4, 3) // 0..1
+  studentFeedbackScore  Decimal?       @db.Decimal(3, 2) // 1..5
+  attendanceRate        Decimal?       @db.Decimal(4, 3) // 0..1
+  updatedByUserId       String?
+  courseOffering        CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  updatedBy             User?          @relation(fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ResearchProject {
+  id               String        @id @default(uuid())
+  lecturerId       String
+  academicPeriodId String
+  title            String
+  theme            String?
+  status           ProjectStatus @default(PLANNED)
+  fundingSource    String?
+
+  lecturer       Lecturer         @relation(fields: [lecturerId], references: [id], onDelete: Restrict)
+  academicPeriod AcademicPeriod   @relation(fields: [academicPeriodId], references: [id], onDelete: Cascade)
+  outputs        ResearchOutput[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([lecturerId])
+  @@index([academicPeriodId])
+}
+
+model ResearchOutput {
+  id                String       @id @default(uuid())
+  researchProjectId String
+  type              OutputType
+  title             String
+  targetIndex       TargetIndex  @default(NONE)
+  status            OutputStatus @default(DRAFT)
+  doi               String?
+  publishDate       DateTime?
+  citationCountYtd  Int          @default(0)
+
+  researchProject ResearchProject @relation(fields: [researchProjectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([researchProjectId])
+}
+
+model ServiceProgram {
+  id                 String        @id @default(uuid())
+  lecturerId         String
+  academicPeriodId   String
+  title              String
+  location           String?
+  partner            String?
+  beneficiariesCount Int?
+  status             ProgramStatus @default(PLANNED)
+
+  lecturer       Lecturer       @relation(fields: [lecturerId], references: [id], onDelete: Restrict)
+  academicPeriod AcademicPeriod @relation(fields: [academicPeriodId], references: [id], onDelete: Cascade)
+  impact         ServiceImpact?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([lecturerId])
+  @@index([academicPeriodId])
+}
+
+model ServiceImpact {
+  id               String   @id @default(uuid())
+  serviceProgramId String   @unique
+  impactScore      Decimal? @db.Decimal(4, 3) // 0..1
+  baselineValue    Decimal? @db.Decimal(12, 3)
+  endlineValue     Decimal? @db.Decimal(12, 3)
+  outcomeSummary   String?
+
+  serviceProgram ServiceProgram @relation(fields: [serviceProgramId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EvidenceType {
+  id             String     @id @default(uuid())
+  code           String     @unique
+  name           String
+  description    String?
+  requiredForBkd Boolean    @default(false)
+  evidences      Evidence[]
+}
+
+model Evidence {
+  id               String         @id @default(uuid())
+  lecturerId       String
+  academicPeriodId String
+  evidenceTypeId   String
+  title            String
+  fileUrl          String?
+  mimeType         String?
+  issuedAt         DateTime?
+  verifiedStatus   VerifiedStatus @default(DRAFT)
+  uploadedByUserId String?
+
+  lecturer       Lecturer       @relation(fields: [lecturerId], references: [id], onDelete: Restrict)
+  academicPeriod AcademicPeriod @relation(fields: [academicPeriodId], references: [id], onDelete: Cascade)
+  evidenceType   EvidenceType   @relation(fields: [evidenceTypeId], references: [id], onDelete: Restrict)
+  uploadedBy     User?          @relation(fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  links          EvidenceLink[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([lecturerId, academicPeriodId])
+  @@index([evidenceTypeId])
+}
+
+model EvidenceLink {
+  id         String             @id @default(uuid())
+  evidenceId String
+  entityType EvidenceEntityType
+  entityId   String // uuid string of linked entity
+
+  evidence Evidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([evidenceId])
+}
+
+model Review {
+  id               String          @id @default(uuid())
+  academicPeriodId String
+  lecturerId       String
+  reviewerUserId   String
+  reviewerRole     ReviewerRole
+  type             ReviewType
+  status           ReviewStatus    @default(OPEN)
+  decision         ReviewDecision?
+  summary          String?
+  completedAt      DateTime?
+
+  academicPeriod AcademicPeriod @relation(fields: [academicPeriodId], references: [id], onDelete: Cascade)
+  lecturer       Lecturer       @relation(fields: [lecturerId], references: [id], onDelete: Restrict)
+  reviewer       User           @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([academicPeriodId])
+  @@index([lecturerId])
+  @@index([reviewerUserId])
+}
+
+model Note {
+  id               String       @id @default(uuid())
+  academicPeriodId String
+  lecturerId       String
+  role             ReviewerRole
+  noteText         String
+  createdByUserId  String
+
+  academicPeriod AcademicPeriod @relation(fields: [academicPeriodId], references: [id], onDelete: Cascade)
+  lecturer       Lecturer       @relation(fields: [lecturerId], references: [id], onDelete: Restrict)
+  createdBy      User           @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([academicPeriodId, lecturerId])
+}
+
+model KpiSnapshot {
+  id                 String   @id @default(uuid())
+  academicPeriodId   String
+  lecturerId         String
+  teachingScore      Decimal? @db.Decimal(4, 3)
+  researchScore      Decimal? @db.Decimal(4, 3)
+  serviceScore       Decimal? @db.Decimal(4, 3)
+  supportScore       Decimal? @db.Decimal(4, 3)
+  tridharmaIndex     Decimal? @db.Decimal(4, 3)
+  evidenceScore      Decimal? @db.Decimal(4, 3)
+  bkdComplianceScore Decimal? @db.Decimal(4, 3)
+  riskScore          Int      @default(0)
+  calculatedAt       DateTime @default(now())
+  calculatedByUserId String?
+
+  academicPeriod AcademicPeriod @relation(fields: [academicPeriodId], references: [id], onDelete: Cascade)
+  lecturer       Lecturer       @relation(fields: [lecturerId], references: [id], onDelete: Restrict)
+  calculatedBy   User?          @relation(fields: [calculatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([academicPeriodId, lecturerId])
+}
+
+model AuditLog {
+  id          String      @id @default(uuid())
+  actorUserId String
+  entityType  String
+  entityId    String
+  action      AuditAction
+  before      Json?
+  after       Json?
+
+  actor User @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+}
